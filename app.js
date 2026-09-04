@@ -131,24 +131,60 @@ function renderAdminReply(text, timestamp) {
 }
 
 // 5. ส่งข้อความของลูกค้าลงระบบ (ไม่แตะต้อง UI ใดๆ ทั้งสิ้น)
+let isSending = false;
+const COOLDOWN_SECONDS = 3; // เวลาที่ต้องรอก่อนส่งข้อความถัดไป
+
 async function sendMessage() {
   const text = messageInput.value.trim();
   if (!text || !currentUser.phone) return;
 
+  // ดักจับการฟลัด
+  if (isSending) return;
+
+  // จำกัดความยาวข้อความต่อครั้ง เช่น ไม่เกิน 300 ตัวอักษร
+  if (text.length > 300) {
+    alert("ข้อความยาวเกินไป (จำกัดไม่เกิน 300 ตัวอักษร)");
+    return;
+  }
+
+  isSending = true;
+  btnSend.disabled = true;
   messageInput.value = "";
 
-  const messagesRef = collection(db, "customers", currentUser.phone, "messages");
+  try {
+    const messagesRef = collection(db, "customers", currentUser.phone, "messages");
 
-  await addDoc(messagesRef, {
-    sender: "user",
-    text: text,
-    timestamp: serverTimestamp()
-  });
+    await addDoc(messagesRef, {
+      sender: "user",
+      text: text,
+      timestamp: serverTimestamp()
+    });
 
-  await setDoc(doc(db, "customers", currentUser.phone), {
-    lastMessage: text,
-    updatedAt: serverTimestamp()
-  }, { merge: true });
+    await setDoc(doc(db, "customers", currentUser.phone), {
+      lastMessage: text,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+  } catch (err) {
+    console.error("Send Error:", err);
+  } finally {
+    // นับถอยหลังปลดล็อกปุ่มส่ง
+    let timeLeft = COOLDOWN_SECONDS;
+    btnSend.textContent = `${timeLeft}s`;
+
+    const timer = setInterval(() => {
+      timeLeft--;
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        isSending = false;
+        btnSend.disabled = false;
+        btnSend.textContent = "ส่ง";
+        messageInput.focus();
+      } else {
+        btnSend.textContent = `${timeLeft}s`;
+      }
+    }, 1000);
+  }
 }
 
 btnSend.addEventListener("click", sendMessage);
