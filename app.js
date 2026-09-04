@@ -8,7 +8,6 @@ const firebaseConfig = {
   apiKey: "AIzaSyCpdlENO8EOWjxqHTZZwlfQoCBIWD8YiEA",
   authDomain: "xxcbase.firebaseapp.com",
   projectId: "xxcbase",
-  storageBucket: "xxcbase.firebasestorage.app",
   messagingSenderId: "437317145536",
   appId: "1:437317145536:web:7007e7a4887cfa341dae25"
 };
@@ -88,10 +87,9 @@ btnLogin.addEventListener("click", async () => {
 function listenToAdminReply(phone) {
   const messagesRef = collection(db, "customers", phone, "messages");
 
-  // กรองเฉพาะข้อความจากแอดมิน และส่งหลังจากเปิดหน้านี้
+  // กรองเฉพาะเวลาที่ส่งหลังจากเปิดหน้าเว็บ
   const q = query(
     messagesRef,
-    where("sender", "==", "admin"),
     where("timestamp", ">=", sessionStartTime),
     orderBy("timestamp", "asc")
   );
@@ -100,9 +98,16 @@ function listenToAdminReply(phone) {
     snapshot.docChanges().forEach((change) => {
       if (change.type === "added") {
         const msgData = change.doc.data();
-        renderAdminReply(msgData.text, msgData.timestamp);
+        console.log("ข้อความที่ได้รับ:", msgData);
+
+        // ตรวจสอบว่าเป็นข้อความจากแอดมินหรือไม่
+        if (msgData.sender === "admin") {
+          renderAdminReply(msgData.text, msgData.timestamp);
+        }
       }
     });
+  }, (err) => {
+    console.error("Firestore error:", err);
   });
 }
 
