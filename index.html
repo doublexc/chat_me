@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Support Chat</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- หน้าต่างล็อกอิน (กรอกชื่อ + เบอร์โทร) -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="login-box">
+      <h2>เข้าสู่ระบบแชท</h2>
+      <div class="input-group">
+        <label for="input-name">ชื่อของคุณ</label>
+        <input type="text" id="input-name" placeholder="ระบุชื่อเรียก...">
+      </div>
+      <div class="input-group">
+        <label for="input-phone">เบอร์โทรศัพท์</label>
+        <input type="tel" id="input-phone" placeholder="เช่น 0812345678">
+      </div>
+      <button id="btn-login">เริ่มการสนทนา</button>
+    </div>
+  </div>
+
+  <!-- หน้าจอแชทหลัก (ตามโครง Wireframe) -->
+  <div class="app-container">
+    <!-- กล่องที่ 1: สถานะ Admin และคำชี้แจง -->
+    <div class="status-card">
+      <div class="status-row">
+        <span class="status-dot offline" id="admin-dot"></span>
+        <span id="admin-status-text">สถานะ Admin: กำลังโหลด...</span>
+      </div>
+      <p class="status-notice">
+        การสนทนานี้จะไม่แสดงข้อความก่อนหน้า แต่โปรดวางใจ เพราะการสนทนาของคุณจะถูกบันทึกไว้ในระบบ
+      </p>
+    </div>
+
+    <!-- กล่องที่ 2: กล่องข้อความแชทสด -->
+    <div class="chat-display-card" id="chat-messages">
+      <div class="empty-hint">ยินดีต้อนรับ พิมพ์ข้อความด้านล่างเพื่อเริ่มการสนทนา</div>
+    </div>
+
+    <!-- กล่องที่ 3: ช่องพิมพ์ข้อความ -->
+    <div class="input-card">
+      <input type="text" id="message-input" placeholder="พิมพ์ข้อความที่นี่..." autocomplete="off">
+      <button id="btn-send">ส่ง</button>
+    </div>
+  </div>
+
+  <!-- Firebase v10 SDKs (Modular ผ่าน ES Modules) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
