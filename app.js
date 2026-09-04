@@ -82,11 +82,11 @@ btnLogin.addEventListener("click", async () => {
   listenToLiveMessages(phone);
 });
 
-// 3. ฟังก์ชันดักฟังเฉพาะข้อความสด (ไม่แสดงประวัติเก่า)
+// 3. ฟังก์ชันดักฟังเฉพาะข้อความตอบกลับสดจาก Admin (ล่าสุดเพียงข้อความเดียว)
 function listenToLiveMessages(phone) {
   const messagesRef = collection(db, "customers", phone, "messages");
-  
-  // กรองเฉพาะ timestamp >= sessionStartTime
+
+  // กรองเฉพาะข้อความที่ส่งมาหลังจากเปิดหน้าเว็บรอบนี้
   const q = query(
     messagesRef,
     where("timestamp", ">=", sessionStartTime),
@@ -96,43 +96,34 @@ function listenToLiveMessages(phone) {
   onSnapshot(q, (snapshot) => {
     snapshot.docChanges().forEach((change) => {
       if (change.type === "added") {
-        // ลบข้อความแจ้งเตือนเริ่มต้นถ้ามี
-        const emptyHint = document.querySelector(".empty-hint");
-        if (emptyHint) emptyHint.remove();
-
         const msgData = change.doc.data();
-        appendMessageUI(msgData.sender, msgData.text, msgData.timestamp);
+        
+        // ถ้าเป็นข้อความจากแอดมิน ให้เอามาแสดงทับเป็นข้อความล่าสุดข้อความเดียว
+        if (msgData.sender === "admin") {
+          renderAdminLatestReply(msgData.text, msgData.timestamp);
+        }
       }
     });
   });
 }
 
-// 4. แสดงข้อความบน UI
-function appendMessageUI(sender, text, timestamp) {
-  const row = document.createElement("div");
-  row.className = `msg-row ${sender}`;
-
-  const bubble = document.createElement("div");
-  bubble.className = "msg-bubble";
-  bubble.textContent = text;
-
-  const time = document.createElement("div");
-  time.className = "msg-time";
-  
+// 4. เรนเดอร์ข้อความแอดมินตัวใหญ่ตรงกลางช่อง
+function renderAdminLatestReply(text, timestamp) {
+  let timeStr = "";
   if (timestamp) {
     const date = timestamp.toDate ? timestamp.toDate() : new Date();
-    time.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else {
-    time.textContent = "กำลังส่ง...";
+    timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  row.appendChild(bubble);
-  row.appendChild(time);
-  chatMessages.appendChild(row);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+  chatMessages.innerHTML = `
+    <div class="admin-latest-reply">
+      <div class="admin-latest-text">${text}</div>
+      ${timeStr ? `<div class="admin-latest-time">ตอบกลับเมื่อ ${timeStr}</div>` : ""}
+    </div>
+  `;
 }
 
-// 5. ส่งข้อความ
+// 5. ส่งข้อความของลูกค้า (บันทึกลงระบบเงียบๆ โดยไม่แสดงบนหน้าจอ)
 async function sendMessage() {
   const text = messageInput.value.trim();
   if (!text || !currentUser.phone) return;
@@ -140,15 +131,15 @@ async function sendMessage() {
   messageInput.value = "";
 
   const messagesRef = collection(db, "customers", currentUser.phone, "messages");
-  
-  // บันทึกลง Sub-collection messages
+
+  // บันทึกลง Firestore เพื่อให้แอดมินอ่านได้
   await addDoc(messagesRef, {
     sender: "user",
     text: text,
     timestamp: serverTimestamp()
   });
 
-  // อัปเดตข้อความล่าสุดในเอกสารของลูกค้า
+  // อัปเดตข้อมูลล่าสุดเพื่อให้แอดมินเห็นใน Inbox
   await setDoc(doc(db, "customers", currentUser.phone), {
     lastMessage: text,
     updatedAt: serverTimestamp()
