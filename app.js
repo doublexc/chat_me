@@ -4,7 +4,6 @@ import {
   serverTimestamp, onSnapshot, query, where, orderBy 
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// ใส่ Firebase Config ของ xxcbase
 const firebaseConfig = {
   apiKey: "AIzaSyCpdlENO8EOWjxqHTZZwlfQoCBIWD8YiEA",
   authDomain: "xxcbase.firebaseapp.com",
@@ -17,16 +16,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ตัวแปรประจำเซสชัน
 let currentUser = {
   name: "",
   phone: ""
 };
 
-// เวลาที่เปิดแอปในรอบปัจจุบัน (ใช้กรองข้อความเก่าทิ้ง)
 const sessionStartTime = new Date();
 
-// Elements UI
 const loginModal = document.getElementById("login-modal");
 const inputName = document.getElementById("input-name");
 const inputPhone = document.getElementById("input-phone");
@@ -38,7 +34,7 @@ const chatMessages = document.getElementById("chat-messages");
 const messageInput = document.getElementById("message-input");
 const btnSend = document.getElementById("btn-send");
 
-// 1. ตรวจจับสถานะ Online ของ Admin แบบ Real-time
+// 1. ตรวจจับสถานะ Online ของ Admin
 onSnapshot(doc(db, "system", "admin_status"), (docSnap) => {
   if (docSnap.exists()) {
     const data = docSnap.data();
@@ -65,30 +61,37 @@ btnLogin.addEventListener("click", async () => {
     return;
   }
 
-  currentUser.name = name;
-  currentUser.phone = phone;
+  btnLogin.disabled = true;
+  btnLogin.textContent = "กำลังเชื่อมต่อ...";
 
-  // บันทึก/อัปเดตข้อมูลลูกค้าลง Firestore
-  await setDoc(doc(db, "customers", phone), {
-    phoneNumber: phone,
-    displayName: name,
-    updatedAt: serverTimestamp()
-  }, { merge: true });
+  try {
+    currentUser.name = name;
+    currentUser.phone = phone;
 
-  // ซ่อน Modal
-  loginModal.style.display = "none";
+    await setDoc(doc(db, "customers", phone), {
+      phoneNumber: phone,
+      displayName: name,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
 
-  // เริ่มดักฟังข้อความแชทสด
-  listenToLiveMessages(phone);
+    loginModal.style.display = "none";
+    listenToAdminReply(phone);
+  } catch (err) {
+    console.error("Login Error:", err);
+    alert("เกิดข้อผิดพลาด: " + err.message);
+    btnLogin.disabled = false;
+    btnLogin.textContent = "เริ่มการสนทนา";
+  }
 });
 
-// 3. ฟังก์ชันดักฟังเฉพาะข้อความตอบกลับสดจาก Admin (ล่าสุดเพียงข้อความเดียว)
-function listenToLiveMessages(phone) {
+// 3. ดักฟังเฉพาะข้อความตอบกลับจาก ADMIN เท่านั้น
+function listenToAdminReply(phone) {
   const messagesRef = collection(db, "customers", phone, "messages");
 
-  // กรองเฉพาะข้อความที่ส่งมาหลังจากเปิดหน้าเว็บรอบนี้
+  // กรองเฉพาะข้อความจากแอดมิน และส่งหลังจากเปิดหน้านี้
   const q = query(
     messagesRef,
+    where("sender", "==", "admin"),
     where("timestamp", ">=", sessionStartTime),
     orderBy("timestamp", "asc")
   );
@@ -97,18 +100,22 @@ function listenToLiveMessages(phone) {
     snapshot.docChanges().forEach((change) => {
       if (change.type === "added") {
         const msgData = change.doc.data();
-        
-        // ถ้าเป็นข้อความจากแอดมิน ให้เอามาแสดงทับเป็นข้อความล่าสุดข้อความเดียว
-        if (msgData.sender === "admin") {
-          renderAdminLatestReply(msgData.text, msgData.timestamp);
-        }
+        renderAdminReply(msgData.text, msgData.timestamp);
       }
     });
   });
 }
 
-// 4. เรนเดอร์ข้อความแอดมินตัวใหญ่ตรงกลางช่อง
-function renderAdminLatestReply(text, timestamp) {
+// 4. แสดงเฉพาะข้อความล่าสุดของ Admin กลางจอ (รองรับการล้างจอด้วยจุด)
+function renderAdminReply(text, timestamp) {
+  const trimmedText = text.trim();
+
+  // ถ้าแอดมินส่งจุด เช่น . หรือ ... ให้สั่งล้างหน้าจอเป็นกล่องว่าง
+  if (trimmedText === "." || trimmedText === ".." || trimmedText === "...") {
+    chatMessages.innerHTML = "";
+    return;
+  }
+
   let timeStr = "";
   if (timestamp) {
     const date = timestamp.toDate ? timestamp.toDate() : new Date();
@@ -123,7 +130,7 @@ function renderAdminLatestReply(text, timestamp) {
   `;
 }
 
-// 5. ส่งข้อความของลูกค้า (บันทึกลงระบบเงียบๆ โดยไม่แสดงบนหน้าจอ)
+// 5. ส่งข้อความของลูกค้าลงระบบ (ไม่แตะต้อง UI ใดๆ ทั้งสิ้น)
 async function sendMessage() {
   const text = messageInput.value.trim();
   if (!text || !currentUser.phone) return;
@@ -132,14 +139,12 @@ async function sendMessage() {
 
   const messagesRef = collection(db, "customers", currentUser.phone, "messages");
 
-  // บันทึกลง Firestore เพื่อให้แอดมินอ่านได้
   await addDoc(messagesRef, {
     sender: "user",
     text: text,
     timestamp: serverTimestamp()
   });
 
-  // อัปเดตข้อมูลล่าสุดเพื่อให้แอดมินเห็นใน Inbox
   await setDoc(doc(db, "customers", currentUser.phone), {
     lastMessage: text,
     updatedAt: serverTimestamp()
