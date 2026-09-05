@@ -145,19 +145,24 @@ async function sendMessage() {
   // ใน app.js (ฟังก์ชัน sendMessage)
 // ตรวจสอบว่าแอดมินออฟไลน์อยู่หรือไม่
 // ตรวจสอบว่าแอดมินออฟไลน์หรือไม่ (เช่น ดูจาก class ของจุดสถานะ)
+// ตรวจสอบว่าแอดมินออฟไลน์อยู่หรือไม่
 if (adminDot.classList.contains("offline")) {
-  fetch("https://script.google.com/macros/s/AKfycbzFaXNqyot4WjkXdl0TraESYpWkJj5cwfq2UndEqhM6cV9URfZsldO4SdPAE4cjY6H1/exec", {
+  fetch("https://aged-silence-89af.xxxcopyxx.workers.dev/chat-notify", {
     method: "POST",
-    mode: "no-cors", // ใช้ no-cors เพื่อเลี่ยงปัญหา CORS บนเบราว์เซอร์
-    headers: {
-      "Content-Type": "text/plain" // no-cors ใช้ text/plain ส่ง JSON string ได้ปกติ
+    headers: { 
+      "Content-Type": "application/json" 
     },
     body: JSON.stringify({
       phone: currentUser.phone,
       message: text
     })
-  }).catch((err) => {
-    console.error("Failed to notify via GAS:", err);
+  })
+  .then(res => res.json())
+  .then(data => {
+    console.log("Worker Response:", data);
+  })
+  .catch(err => {
+    console.error("Worker fetch error:", err);
   });
 }
 
