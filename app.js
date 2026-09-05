@@ -144,16 +144,21 @@ async function sendMessage() {
 
   // ใน app.js (ฟังก์ชัน sendMessage)
 // ตรวจสอบว่าแอดมินออฟไลน์อยู่หรือไม่
+// ตรวจสอบว่าแอดมินออฟไลน์หรือไม่ (เช่น ดูจาก class ของจุดสถานะ)
 if (adminDot.classList.contains("offline")) {
-  fetch("URL_GOOGLE_APPS_SCRIPT_ที่ได้มา", {
+  fetch("https://script.google.com/macros/s/AKfycbzFaXNqyot4WjkXdl0TraESYpWkJj5cwfq2UndEqhM6cV9URfZsldO4SdPAE4cjY6H1/exec", {
     method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "application/json" },
+    mode: "no-cors", // ใช้ no-cors เพื่อเลี่ยงปัญหา CORS บนเบราว์เซอร์
+    headers: {
+      "Content-Type": "text/plain" // no-cors ใช้ text/plain ส่ง JSON string ได้ปกติ
+    },
     body: JSON.stringify({
       phone: currentUser.phone,
       message: text
     })
-  }).catch(err => console.error("Notify failed:", err));
+  }).catch((err) => {
+    console.error("Failed to notify via GAS:", err);
+  });
 }
 
   
