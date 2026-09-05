@@ -141,6 +141,22 @@ const COOLDOWN_SECONDS = 3; // เวลาที่ต้องรอก่อ�
 
 async function sendMessage() {
   const text = messageInput.value.trim();
+
+  // ใน app.js (ฟังก์ชัน sendMessage)
+// ตรวจสอบว่าแอดมินออฟไลน์อยู่หรือไม่
+if (adminDot.classList.contains("offline")) {
+  fetch("URL_GOOGLE_APPS_SCRIPT_ที่ได้มา", {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phone: currentUser.phone,
+      message: text
+    })
+  }).catch(err => console.error("Notify failed:", err));
+}
+
+  
   if (!text || !currentUser.phone) return;
 
   // ดักจับการฟลัด
