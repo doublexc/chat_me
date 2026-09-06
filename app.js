@@ -20,6 +20,9 @@ let currentUser = {
   phone: ""
 };
 
+// บันทึกเวลาที่เปิดหน้าเว็บรอบนี้ เพื่อไม่ให้แสดงข้อความที่ Admin ตอบไว้ก่อนหน้านี้
+const sessionStartTime = new Date();
+
 const loginModal = document.getElementById("login-modal");
 const inputName = document.getElementById("input-name");
 const inputPhone = document.getElementById("input-phone");
@@ -31,7 +34,7 @@ const chatMessages = document.getElementById("chat-messages");
 const messageInput = document.getElementById("message-input");
 const btnSend = document.getElementById("btn-send");
 
-// 1. ตรวจจับสถานะ Online ของ Admin (Path นี้เปิด read: if true ไว้ อ่านได้ปกติ)
+// 1. ตรวจจับสถานะ Online ของ Admin
 onSnapshot(doc(db, "system", "admin_status"), (docSnap) => {
   if (docSnap.exists()) {
     const data = docSnap.data();
@@ -74,13 +77,16 @@ btnLogin.addEventListener("click", async () => {
 
     loginModal.style.display = "none";
     
-    // แจ้งเตือนข้อความต้อนรับบนหน้าจอ (เฉพาะเครื่องลูกค้า ไม่ดึงจากฐานข้อมูล)
     chatMessages.innerHTML = `
-      <div style="text-align: center; color: #888; margin-top: 20px; font-size: 14px;">
+      <div style="text-align: center; color: #888; margin: 15px 0; font-size: 13px; line-height: 1.5;">
         เริ่มการสนทนากับ Admin แล้ว<br>
-        (ระบบจะไม่บันทึกประวัติการแชทไว้บนหน้าจอนี้เพื่อความปลอดภัย)
+        (ระบบจะไม่แสดงประวัติการแชทเก่าเพื่อความปลอดภัย)
       </div>
     `;
+
+    // เริ่มดักฟังคำตอบล่าสุดจาก Admin
+    listenToAdminReply(phone);
+
   } catch (err) {
     console.error("Login Error:", err);
     alert("เกิดข้อผิดพลาด: " + err.message);
@@ -89,14 +95,69 @@ btnLogin.addEventListener("click", async () => {
   }
 });
 
-// 3. ส่งข้อความของลูกค้าลงระบบ (Write-Only)
+// 3. ดักฟังคำตอบล่าสุดจาก ADMIN (ดึงจาก doc customers ไม่ผ่าน subcollection)
+function listenToAdminReply(phone) {
+  const customerDocRef = doc(db, "customers", phone);
+
+  onSnapshot(customerDocRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      
+      // ตรวจสอบว่ามีข้อความตอบกลับล่าสุดและเวลาบันทึกไว้หรือไม่
+      if (data.latestAdminReply && data.adminReplyTimestamp) {
+        const replyTime = data.adminReplyTimestamp.toDate ? data.adminReplyTimestamp.toDate() : new Date(data.adminReplyTimestamp);
+        
+        // แสดงผลเฉพาะข้อความที่ส่งมาหลังเปิดหน้าเว็บรอบปัจจุบันเท่านั้น
+        if (replyTime >= sessionStartTime) {
+          renderAdminReply(data.latestAdminReply, data.adminReplyTimestamp);
+        }
+      }
+    }
+  }, (err) => {
+    console.log("Admin listener closed or expired:", err.message);
+  });
+}
+
+// 4. แสดงข้อความตอบกลับของ Admin ทางฝั่งซ้าย
+function renderAdminReply(text, timestamp) {
+  const trimmedText = text.trim();
+
+  // รองรับการส่งจุดเพื่อล้างข้อความ
+  if (trimmedText === "." || trimmedText === ".." || trimmedText === "...") {
+    return;
+  }
+
+  let timeStr = "";
+  if (timestamp) {
+    const date = timestamp.toDate ? timestamp.toDate() : new Date();
+    timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  const msgElement = document.createElement("div");
+  msgElement.style.display = "flex";
+  msgElement.style.justifyContent = "flex-start";
+  msgElement.style.width = "100%";
+  msgElement.style.margin = "4px 0";
+
+  msgElement.innerHTML = `
+    <div style="background-color: #e4e6eb; color: #050505; padding: 10px 14px; border-radius: 16px; max-width: 75%; word-break: break-word; text-align: left; font-size: 14px; line-height: 1.4;">
+      <div style="font-size: 11px; color: #65676b; margin-bottom: 2px;">Admin</div>
+      ${escapeHtml(text)}
+      ${timeStr ? `<div style="font-size: 10px; color: #8a8d91; text-align: right; margin-top: 4px;">${timeStr}</div>` : ""}
+    </div>
+  `;
+
+  chatMessages.appendChild(msgElement);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// 5. ส่งข้อความของลูกค้าลงระบบ (Write-Only)
 let isSending = false;
-const COOLDOWN_SECONDS = 3; // เวลาที่ต้องรอก่อนส่งข้อความถัดไป
+const COOLDOWN_SECONDS = 3;
 
 async function sendMessage() {
   const text = messageInput.value.trim();
 
-  // ตรวจสอบความถูกต้องเบื้องต้น
   if (!text || !currentUser.phone) return;
   if (isSending) return;
 
@@ -109,26 +170,26 @@ async function sendMessage() {
   btnSend.disabled = true;
   messageInput.value = "";
 
-  // แสดงข้อความที่เพิ่งส่งบนหน้าจอของลูกค้าทันที (Local Echo)
+  // แสดงข้อความที่เพิ่งส่งบนหน้าจอของลูกค้าทันที (ฝั่งขวา)
   renderLocalMessage(text);
 
   try {
     const messagesRef = collection(db, "customers", currentUser.phone, "messages");
 
-    // 3.1 เพิ่มข้อความใหม่เข้า messages (ลูกค้ามีสิทธิ์ create: if true)
+    // ส่งข้อความเข้า messages (แอดมินอ่านได้คนเดียว)
     await addDoc(messagesRef, {
       sender: "user",
       text: text,
       timestamp: serverTimestamp()
     });
 
-    // 3.2 อัปเดตฟิลด์ lastMessage และ updatedAt (ตรงตาม affectedKeys ใน Rule)
+    // อัปเดตข้อมูลลูกค้า
     await setDoc(doc(db, "customers", currentUser.phone), {
       lastMessage: text,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    // 3.3 ถ้า Admin ออฟไลน์ ให้ยิงแจ้งเตือนผ่าน Cloudflare Worker
+    // ยิงแจ้งเตือนผ่าน Worker ถ้า Admin ออฟไลน์
     if (adminDot.classList.contains("offline")) {
       fetch("https://aged-silence-89af.xxxcopyxx.workers.dev/chat-notify", {
         method: "POST",
@@ -149,7 +210,6 @@ async function sendMessage() {
     console.error("Send Error:", err);
     alert("ไม่สามารถส่งข้อความได้: " + err.message);
   } finally {
-    // นับถอยหลัง Cooldown ปลดล็อกปุ่มส่ง
     let timeLeft = COOLDOWN_SECONDS;
     btnSend.textContent = `${timeLeft}s`;
 
@@ -168,18 +228,20 @@ async function sendMessage() {
   }
 }
 
-// 4. ฟังก์ชันแสดง Bubble ข้อความที่เพิ่งส่ง (ทำงานเฉพาะในเครื่องลูกค้า)
+// 6. แสดง Bubble ข้อความที่เพิ่งส่งของลูกค้า (ฝั่งขวา)
 function renderLocalMessage(text) {
   const msgElement = document.createElement("div");
-  msgElement.style.textAlign = "right";
-  msgElement.style.margin = "10px 0";
-  
+  msgElement.style.display = "flex";
+  msgElement.style.justifyContent = "flex-end";
+  msgElement.style.width = "100%";
+  msgElement.style.margin = "4px 0";
+
   msgElement.innerHTML = `
-    <div style="display: inline-block; background-color: #007bff; color: white; padding: 8px 14px; border-radius: 15px; max-width: 80%; word-break: break-word; text-align: left; font-size: 14px;">
+    <div style="background-color: #007bff; color: white; padding: 10px 14px; border-radius: 16px; max-width: 75%; word-break: break-word; text-align: left; font-size: 14px; line-height: 1.4;">
       ${escapeHtml(text)}
     </div>
   `;
-  
+
   chatMessages.appendChild(msgElement);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
