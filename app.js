@@ -118,15 +118,14 @@ function listenToLiveReply(phone) {
 }
 
 // 4. แสดงข้อความ Admin บนหน้าจอ
+// ปรับปรุงฟังก์ชัน renderAdminReply ให้แสดงบับเบิ้ลใหญ่ตรงกลาง
 function renderAdminReply(text, timestamp) {
   const trimmedText = text.trim();
 
-  // คำสั่งส่งจุดเพื่อล้างจอ
+  // รองรับคำสั่งส่งจุดเพื่อเคลียร์จบสนทนา
   if (trimmedText === "." || trimmedText === ".." || trimmedText === "...") {
     chatMessages.innerHTML = `
-      <div style="text-align: center; color: #888; margin: 15px 0; font-size: 13px;">
-        จบการสนทนาเรียบร้อยแล้ว
-      </div>
+      <div class="empty-hint">จบการสนทนาเรียบร้อยแล้ว</div>
     `;
     return;
   }
@@ -137,16 +136,18 @@ function renderAdminReply(text, timestamp) {
     timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  // ดึงป้ายสถานะส่งข้อความด้านล่างเก็บไว้ (ถ้ามี)
+  const existingNotice = document.getElementById("send-status-notice");
+  const noticeHtml = existingNotice ? existingNotice.outerHTML : "";
+
   chatMessages.innerHTML = `
-    <div style="display: flex; justify-content: flex-start; width: 100%; margin: 10px 0;">
-      <div style="background-color: #e4e6eb; color: #050505; padding: 10px 14px; border-radius: 16px; max-width: 80%; word-break: break-word; text-align: left; font-size: 14px; line-height: 1.4;">
-        <div style="font-size: 11px; color: #65676b; margin-bottom: 2px;">Admin</div>
-        ${escapeHtml(text)}
-        ${timeStr ? `<div style="font-size: 10px; color: #8a8d91; text-align: right; margin-top: 4px;">${timeStr}</div>` : ""}
-      </div>
+    <div class="admin-latest-reply">
+      <div class="admin-tag">Admin</div>
+      <div class="admin-latest-text">${escapeHtml(text)}</div>
+      ${timeStr ? `<div class="admin-latest-time">${timeStr}</div>` : ""}
     </div>
+    ${noticeHtml}
   `;
-  chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 // 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
@@ -196,11 +197,15 @@ async function sendMessage() {
     }
 
     // 5.3 ขึ้นป้ายสถานะส่งสำเร็จ (ไม่สร้างบับเบิ้ลข้อความค้างบนจอ)
-    const statusNotice = document.createElement("div");
-    statusNotice.style.cssText = "text-align: center; color: #28a745; margin: 6px 0; font-size: 12px;";
+    // 5.3 อัปเดตป้ายแจ้งเตือนที่ด้านล่างสุดของช่องแชท
+    let statusNotice = document.getElementById("send-status-notice");
+    if (!statusNotice) {
+      statusNotice = document.createElement("div");
+      statusNotice.id = "send-status-notice";
+      statusNotice.className = "send-status-notice";
+      chatMessages.appendChild(statusNotice);
+    }
     statusNotice.textContent = "✓ ส่งข้อความเรียบร้อยแล้ว";
-    chatMessages.appendChild(statusNotice);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
 
   } catch (err) {
     console.error("Send Error:", err);
