@@ -99,18 +99,20 @@ btnLogin.addEventListener("click", async () => {
 // 3. ดักฟังคำตอบสดจาก Admin ผ่านกระดาน live_replies
 function listenToLiveReply(phone) {
   const replyDocRef = doc(db, "live_replies", phone);
+  let isInitialLoad = true;
 
   onSnapshot(replyDocRef, (docSnap) => {
+    // 🔒 ข้ามข้อมูลเดิมที่ตกค้างอยู่ในฐานข้อมูลทันทีตอนเปิดหน้าจอ
+    // จะทำงานเฉพาะเมื่อแอดมินพิมพ์ส่งข้อความใหม่ "สดๆ" เข้ามาหลังจากนี้เท่านั้น
+    if (isInitialLoad) {
+      isInitialLoad = false;
+      return; 
+    }
+
     if (docSnap.exists()) {
       const data = docSnap.data();
-      
-      if (data.text && data.timestamp) {
-        const replyTime = data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
-        
-        // กรองแสดงผลเฉพาะข้อความที่ส่งมาหลังเปิดหน้าเว็บรอบนี้เท่านั้น
-        if (replyTime >= sessionStartTime) {
-          renderAdminReply(data.text, replyTime);
-        }
+      if (data.text) {
+        renderAdminReply(data.text, data.timestamp);
       }
     }
   }, (err) => {
@@ -118,17 +120,25 @@ function listenToLiveReply(phone) {
   });
 }
 
-// 4. แสดงข้อความ Admin บนหน้าจอ
-function renderAdminReply(text, time) {
-  // ซ่อนป้ายสถานะส่งข้อความออกเมื่อมีข้อความตอบกลับจาก Admin
+
+// 4. แสดงข้อความ Admin บนหน้าจอ (แสดงเฉพาะข้อความล่าสุดอันเดียว ไม่เก็บประวัติ)
+function renderAdminReply(text, timestamp) {
+  // ลบป้ายสถานะส่งข้อความ
   const statusNotice = document.getElementById("send-status-notice");
-  if (statusNotice) {
-    statusNotice.remove();
+  if (statusNotice) statusNotice.remove();
+
+  // 🔒 ลบกล่องคำตอบเดิมของ Admin ทั้งหมดทิ้งทันที ไม่ให้สะสมเป็นประวัติแชต
+  const existingReplies = chatMessages.querySelectorAll(".admin-reply-card");
+  existingReplies.forEach(card => card.remove());
+
+  let timeString = "";
+  if (timestamp) {
+    const time = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  const timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  
   const replyCard = document.createElement("div");
+  replyCard.className = "admin-reply-card";
   replyCard.style.cssText = `
     background: #eef2ff;
     border: 1px solid #c7d2fe;
@@ -141,7 +151,7 @@ function renderAdminReply(text, time) {
 
   replyCard.innerHTML = `
     <div style="font-size: 12px; font-weight: bold; color: #4338ca; margin-bottom: 6px; display: flex; justify-content: space-between;">
-      <span>คำตอบจาก Admin</span>
+      <span>คำตอบล่าสุดจาก Admin</span>
       <span style="font-weight: normal; color: #6b7280;">${timeString}</span>
     </div>
     <div style="font-size: 15px; color: #1f2937; line-height: 1.5; word-break: break-word;">
@@ -152,6 +162,7 @@ function renderAdminReply(text, time) {
   chatMessages.appendChild(replyCard);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
 
 // 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
 let isSending = false;
