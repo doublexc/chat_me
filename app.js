@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { 
   getFirestore, doc, collection, addDoc, setDoc, 
-  serverTimestamp, onSnapshot, query, where, orderBy 
+  serverTimestamp, onSnapshot 
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -20,8 +20,6 @@ let currentUser = {
   phone: ""
 };
 
-const sessionStartTime = new Date();
-
 const loginModal = document.getElementById("login-modal");
 const inputName = document.getElementById("input-name");
 const inputPhone = document.getElementById("input-phone");
@@ -33,7 +31,7 @@ const chatMessages = document.getElementById("chat-messages");
 const messageInput = document.getElementById("message-input");
 const btnSend = document.getElementById("btn-send");
 
-// 1. ตรวจจับสถานะ Online ของ Admin
+// 1. ตรวจจับสถานะ Online ของ Admin (Path นี้เปิด read: if true ไว้ อ่านได้ปกติ)
 onSnapshot(doc(db, "system", "admin_status"), (docSnap) => {
   if (docSnap.exists()) {
     const data = docSnap.data();
@@ -67,6 +65,7 @@ btnLogin.addEventListener("click", async () => {
     currentUser.name = name;
     currentUser.phone = phone;
 
+    // สร้างหรืออัปเดตเอกสารข้อมูลลูกค้า
     await setDoc(doc(db, "customers", phone), {
       phoneNumber: phone,
       displayName: name,
@@ -74,7 +73,14 @@ btnLogin.addEventListener("click", async () => {
     }, { merge: true });
 
     loginModal.style.display = "none";
-    listenToAdminReply(phone);
+    
+    // แจ้งเตือนข้อความต้อนรับบนหน้าจอ (เฉพาะเครื่องลูกค้า ไม่ดึงจากฐานข้อมูล)
+    chatMessages.innerHTML = `
+      <div style="text-align: center; color: #888; margin-top: 20px; font-size: 14px;">
+        เริ่มการสนทนากับ Admin แล้ว<br>
+        (ระบบจะไม่บันทึกประวัติการแชทไว้บนหน้าจอนี้เพื่อความปลอดภัย)
+      </div>
+    `;
   } catch (err) {
     console.error("Login Error:", err);
     alert("เกิดข้อผิดพลาด: " + err.message);
@@ -83,96 +89,17 @@ btnLogin.addEventListener("click", async () => {
   }
 });
 
-// 3. ดักฟังเฉพาะข้อความตอบกลับจาก ADMIN เท่านั้น
-function listenToAdminReply(phone) {
-  const messagesRef = collection(db, "customers", phone, "messages");
-
-  // กรองเฉพาะเวลาที่ส่งหลังจากเปิดหน้าเว็บ
-  const q = query(
-    messagesRef,
-    where("timestamp", ">=", sessionStartTime),
-    orderBy("timestamp", "asc")
-  );
-
-  onSnapshot(q, (snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-      if (change.type === "added") {
-        const msgData = change.doc.data();
-        console.log("ข้อความที่ได้รับ:", msgData);
-
-        // ตรวจสอบว่าเป็นข้อความจากแอดมินหรือไม่
-        if (msgData.sender === "admin") {
-          renderAdminReply(msgData.text, msgData.timestamp);
-        }
-      }
-    });
-  }, (err) => {
-    console.error("Firestore error:", err);
-  });
-}
-
-// 4. แสดงเฉพาะข้อความล่าสุดของ Admin กลางจอ (รองรับการล้างจอด้วยจุด)
-function renderAdminReply(text, timestamp) {
-  const trimmedText = text.trim();
-
-  // ถ้าแอดมินส่งจุด เช่น . หรือ ... ให้สั่งล้างหน้าจอเป็นกล่องว่าง
-  if (trimmedText === "." || trimmedText === ".." || trimmedText === "...") {
-    chatMessages.innerHTML = "";
-    return;
-  }
-
-  let timeStr = "";
-  if (timestamp) {
-    const date = timestamp.toDate ? timestamp.toDate() : new Date();
-    timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
-  chatMessages.innerHTML = `
-    <div class="admin-latest-reply">
-      <div class="admin-latest-text">${text}</div>
-      ${timeStr ? `<div class="admin-latest-time">ตอบกลับเมื่อ ${timeStr}</div>` : ""}
-    </div>
-  `;
-}
-
-// 5. ส่งข้อความของลูกค้าลงระบบ (ไม่แตะต้อง UI ใดๆ ทั้งสิ้น)
+// 3. ส่งข้อความของลูกค้าลงระบบ (Write-Only)
 let isSending = false;
 const COOLDOWN_SECONDS = 3; // เวลาที่ต้องรอก่อนส่งข้อความถัดไป
 
 async function sendMessage() {
   const text = messageInput.value.trim();
 
-  // ใน app.js (ฟังก์ชัน sendMessage)
-// ตรวจสอบว่าแอดมินออฟไลน์อยู่หรือไม่
-// ตรวจสอบว่าแอดมินออฟไลน์หรือไม่ (เช่น ดูจาก class ของจุดสถานะ)
-// ตรวจสอบว่าแอดมินออฟไลน์อยู่หรือไม่
-if (adminDot.classList.contains("offline")) {
-  fetch("https://aged-silence-89af.xxxcopyxx.workers.dev/chat-notify", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json" 
-    },
-    body: JSON.stringify({
-      phone: currentUser.phone,
-      message: text
-    })
-  })
-  .then(res => res.json())
-  .then(data => {
-    console.log("Worker Response:", data);
-  })
-  .catch(err => {
-    console.error("Worker fetch error:", err);
-  });
-}
-
-  
+  // ตรวจสอบความถูกต้องเบื้องต้น
   if (!text || !currentUser.phone) return;
-
-  // ดักจับการฟลัด
   if (isSending) return;
 
-  // จำกัดความยาวข้อความต่อครั้ง เช่น ไม่เกิน 300 ตัวอักษร
   if (text.length > 300) {
     alert("ข้อความยาวเกินไป (จำกัดไม่เกิน 300 ตัวอักษร)");
     return;
@@ -182,24 +109,47 @@ if (adminDot.classList.contains("offline")) {
   btnSend.disabled = true;
   messageInput.value = "";
 
+  // แสดงข้อความที่เพิ่งส่งบนหน้าจอของลูกค้าทันที (Local Echo)
+  renderLocalMessage(text);
+
   try {
     const messagesRef = collection(db, "customers", currentUser.phone, "messages");
 
+    // 3.1 เพิ่มข้อความใหม่เข้า messages (ลูกค้ามีสิทธิ์ create: if true)
     await addDoc(messagesRef, {
       sender: "user",
       text: text,
       timestamp: serverTimestamp()
     });
 
+    // 3.2 อัปเดตฟิลด์ lastMessage และ updatedAt (ตรงตาม affectedKeys ใน Rule)
     await setDoc(doc(db, "customers", currentUser.phone), {
       lastMessage: text,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
+    // 3.3 ถ้า Admin ออฟไลน์ ให้ยิงแจ้งเตือนผ่าน Cloudflare Worker
+    if (adminDot.classList.contains("offline")) {
+      fetch("https://aged-silence-89af.xxxcopyxx.workers.dev/chat-notify", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json" 
+        },
+        body: JSON.stringify({
+          phone: currentUser.phone,
+          message: text
+        })
+      })
+      .then(res => res.json())
+      .then(data => console.log("Worker Response:", data))
+      .catch(err => console.error("Worker fetch error:", err));
+    }
+
   } catch (err) {
     console.error("Send Error:", err);
+    alert("ไม่สามารถส่งข้อความได้: " + err.message);
   } finally {
-    // นับถอยหลังปลดล็อกปุ่มส่ง
+    // นับถอยหลัง Cooldown ปลดล็อกปุ่มส่ง
     let timeLeft = COOLDOWN_SECONDS;
     btnSend.textContent = `${timeLeft}s`;
 
@@ -216,6 +166,29 @@ if (adminDot.classList.contains("offline")) {
       }
     }, 1000);
   }
+}
+
+// 4. ฟังก์ชันแสดง Bubble ข้อความที่เพิ่งส่ง (ทำงานเฉพาะในเครื่องลูกค้า)
+function renderLocalMessage(text) {
+  const msgElement = document.createElement("div");
+  msgElement.style.textAlign = "right";
+  msgElement.style.margin = "10px 0";
+  
+  msgElement.innerHTML = `
+    <div style="display: inline-block; background-color: #007bff; color: white; padding: 8px 14px; border-radius: 15px; max-width: 80%; word-break: break-word; text-align: left; font-size: 14px;">
+      ${escapeHtml(text)}
+    </div>
+  `;
+  
+  chatMessages.appendChild(msgElement);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// ฟังก์ชันป้องกัน XSS
+function escapeHtml(string) {
+  const div = document.createElement("div");
+  div.textContent = string;
+  return div.innerHTML;
 }
 
 btnSend.addEventListener("click", sendMessage);
