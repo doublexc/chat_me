@@ -119,36 +119,18 @@ function listenToLiveReply(phone) {
 
 // 4. แสดงข้อความ Admin บนหน้าจอ
 // ปรับปรุงฟังก์ชัน renderAdminReply ให้แสดงบับเบิ้ลใหญ่ตรงกลาง
-function renderAdminReply(text, timestamp) {
-  const trimmedText = text.trim();
-
-  // รองรับคำสั่งส่งจุดเพื่อเคลียร์จบสนทนา
-  if (trimmedText === "." || trimmedText === ".." || trimmedText === "...") {
-    chatMessages.innerHTML = `
-      <div class="empty-hint">จบการสนทนาเรียบร้อยแล้ว</div>
-    `;
-    return;
-  }
-
-  let timeStr = "";
-  if (timestamp) {
-    const date = timestamp.toDate ? timestamp.toDate() : new Date();
-    timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
-  // ดึงป้ายสถานะส่งข้อความด้านล่างเก็บไว้ (ถ้ามี)
-  const existingNotice = document.getElementById("send-status-notice");
-  const noticeHtml = existingNotice ? existingNotice.outerHTML : "";
-
-  chatMessages.innerHTML = `
-    <div class="admin-latest-reply">
-      <div class="admin-tag">Admin</div>
-      <div class="admin-latest-text">${escapeHtml(text)}</div>
-      ${timeStr ? `<div class="admin-latest-time">${timeStr}</div>` : ""}
-    </div>
-    ${noticeHtml}
-  `;
-}
+// 5.3 อัปเดตป้ายแจ้งเตือน ตรึงไว้ล่างสุดของกรอบแชท
+    chatMessages.style.position = "relative";
+    let statusNotice = document.getElementById("send-status-notice");
+    if (!statusNotice) {
+      statusNotice = document.createElement("div");
+      statusNotice.id = "send-status-notice";
+      chatMessages.appendChild(statusNotice);
+    }
+    
+    // กำหนดสไตล์ให้อยู่ตรงกลางชิดล่าง
+    statusNotice.style.cssText = "position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #28a745; font-size: 13px; font-weight: bold; white-space: nowrap;";
+    statusNotice.textContent = "✓ ส่งข้อความเรียบร้อยแล้ว";
 
 // 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
 let isSending = false;
@@ -197,14 +179,17 @@ async function sendMessage() {
     }
 
     // 5.3 ขึ้นป้ายสถานะส่งสำเร็จ (ไม่สร้างบับเบิ้ลข้อความค้างบนจอ)
-    // 5.3 อัปเดตป้ายแจ้งเตือนที่ด้านล่างสุดของช่องแชท
+    // 5.3 อัปเดตป้ายแจ้งเตือน ตรึงไว้ล่างสุดของกรอบแชท
+    chatMessages.style.position = "relative";
     let statusNotice = document.getElementById("send-status-notice");
     if (!statusNotice) {
       statusNotice = document.createElement("div");
       statusNotice.id = "send-status-notice";
-      statusNotice.className = "send-status-notice";
       chatMessages.appendChild(statusNotice);
     }
+    
+    // กำหนดสไตล์ให้อยู่ตรงกลางชิดล่าง
+    statusNotice.style.cssText = "position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #28a745; font-size: 13px; font-weight: bold; white-space: nowrap;";
     statusNotice.textContent = "✓ ส่งข้อความเรียบร้อยแล้ว";
 
   } catch (err) {
