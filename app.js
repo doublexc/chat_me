@@ -20,7 +20,7 @@ let currentUser = {
   phone: ""
 };
 
-// บันทึกเวลาที่เปิดหน้าเว็บรอบนี้ เพื่อไม่ให้แสดงข้อความที่ Admin ตอบไว้ก่อนหน้านี้
+// บันทึกเวลาเปิดหน้าเว็บ เพื่อไม่ดึงข้อความที่เคยตอบไว้ก่อนหน้านี้มาแสดง
 const sessionStartTime = new Date();
 
 const loginModal = document.getElementById("login-modal");
@@ -34,7 +34,7 @@ const chatMessages = document.getElementById("chat-messages");
 const messageInput = document.getElementById("message-input");
 const btnSend = document.getElementById("btn-send");
 
-// 1. ตรวจจับสถานะ Online ของ Admin
+// 1. ตรวจสอบสถานะ Online ของ Admin
 onSnapshot(doc(db, "system", "admin_status"), (docSnap) => {
   if (docSnap.exists()) {
     const data = docSnap.data();
@@ -68,7 +68,7 @@ btnLogin.addEventListener("click", async () => {
     currentUser.name = name;
     currentUser.phone = phone;
 
-    // สร้างหรืออัปเดตเอกสารข้อมูลลูกค้า
+    // บันทึกข้อมูลลูกค้าเข้าตู้เซฟ customers
     await setDoc(doc(db, "customers", phone), {
       phoneNumber: phone,
       displayName: name,
@@ -84,8 +84,8 @@ btnLogin.addEventListener("click", async () => {
       </div>
     `;
 
-    // เริ่มดักฟังคำตอบล่าสุดจาก Admin
-    listenToAdminReply(phone);
+    // เริ่มดักฟังคำตอบสดจากกระดาน live_replies
+    listenToLiveReply(phone);
 
   } catch (err) {
     console.error("Login Error:", err);
@@ -95,35 +95,39 @@ btnLogin.addEventListener("click", async () => {
   }
 });
 
-// 3. ดักฟังคำตอบล่าสุดจาก ADMIN (ดึงจาก doc customers ไม่ผ่าน subcollection)
-function listenToAdminReply(phone) {
-  const customerDocRef = doc(db, "customers", phone);
+// 3. ดักฟังคำตอบสดจาก Admin ผ่านกระดาน live_replies
+function listenToLiveReply(phone) {
+  const replyDocRef = doc(db, "live_replies", phone);
 
-  onSnapshot(customerDocRef, (docSnap) => {
+  onSnapshot(replyDocRef, (docSnap) => {
     if (docSnap.exists()) {
       const data = docSnap.data();
       
-      // ตรวจสอบว่ามีข้อความตอบกลับล่าสุดและเวลาบันทึกไว้หรือไม่
-      if (data.latestAdminReply && data.adminReplyTimestamp) {
-        const replyTime = data.adminReplyTimestamp.toDate ? data.adminReplyTimestamp.toDate() : new Date(data.adminReplyTimestamp);
+      if (data.text && data.timestamp) {
+        const replyTime = data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
         
-        // แสดงผลเฉพาะข้อความที่ส่งมาหลังเปิดหน้าเว็บรอบปัจจุบันเท่านั้น
+        // กรองแสดงผลเฉพาะข้อความที่ส่งมาหลังเปิดหน้าเว็บรอบนี้เท่านั้น
         if (replyTime >= sessionStartTime) {
-          renderAdminReply(data.latestAdminReply, data.adminReplyTimestamp);
+          renderAdminReply(data.text, data.timestamp);
         }
       }
     }
   }, (err) => {
-    console.log("Admin listener closed or expired:", err.message);
+    console.error("Listener error:", err);
   });
 }
 
-// 4. แสดงข้อความตอบกลับของ Admin ทางฝั่งซ้าย
+// 4. แสดงข้อความ Admin บนหน้าจอ
 function renderAdminReply(text, timestamp) {
   const trimmedText = text.trim();
 
-  // รองรับการส่งจุดเพื่อล้างข้อความ
+  // คำสั่งส่งจุดเพื่อล้างจอ
   if (trimmedText === "." || trimmedText === ".." || trimmedText === "...") {
+    chatMessages.innerHTML = `
+      <div style="text-align: center; color: #888; margin: 15px 0; font-size: 13px;">
+        จบการสนทนาเรียบร้อยแล้ว
+      </div>
+    `;
     return;
   }
 
@@ -133,25 +137,19 @@ function renderAdminReply(text, timestamp) {
     timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  const msgElement = document.createElement("div");
-  msgElement.style.display = "flex";
-  msgElement.style.justifyContent = "flex-start";
-  msgElement.style.width = "100%";
-  msgElement.style.margin = "4px 0";
-
-  msgElement.innerHTML = `
-    <div style="background-color: #e4e6eb; color: #050505; padding: 10px 14px; border-radius: 16px; max-width: 75%; word-break: break-word; text-align: left; font-size: 14px; line-height: 1.4;">
-      <div style="font-size: 11px; color: #65676b; margin-bottom: 2px;">Admin</div>
-      ${escapeHtml(text)}
-      ${timeStr ? `<div style="font-size: 10px; color: #8a8d91; text-align: right; margin-top: 4px;">${timeStr}</div>` : ""}
+  chatMessages.innerHTML = `
+    <div style="display: flex; justify-content: flex-start; width: 100%; margin: 10px 0;">
+      <div style="background-color: #e4e6eb; color: #050505; padding: 10px 14px; border-radius: 16px; max-width: 80%; word-break: break-word; text-align: left; font-size: 14px; line-height: 1.4;">
+        <div style="font-size: 11px; color: #65676b; margin-bottom: 2px;">Admin</div>
+        ${escapeHtml(text)}
+        ${timeStr ? `<div style="font-size: 10px; color: #8a8d91; text-align: right; margin-top: 4px;">${timeStr}</div>` : ""}
+      </div>
     </div>
   `;
-
-  chatMessages.appendChild(msgElement);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// 5. ส่งข้อความของลูกค้าลงระบบ (Write-Only)
+// 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
 let isSending = false;
 const COOLDOWN_SECONDS = 3;
 
@@ -168,43 +166,41 @@ async function sendMessage() {
 
   isSending = true;
   btnSend.disabled = true;
-  messageInput.value = "";
-
-  // แสดงข้อความที่เพิ่งส่งบนหน้าจอของลูกค้าทันที (ฝั่งขวา)
-  renderLocalMessage(text);
+  messageInput.value = ""; 
 
   try {
     const messagesRef = collection(db, "customers", currentUser.phone, "messages");
 
-    // ส่งข้อความเข้า messages (แอดมินอ่านได้คนเดียว)
+    // 5.1 บันทึกเข้าประวัติตู้เซฟ
     await addDoc(messagesRef, {
       sender: "user",
       text: text,
       timestamp: serverTimestamp()
     });
 
-    // อัปเดตข้อมูลลูกค้า
     await setDoc(doc(db, "customers", currentUser.phone), {
       lastMessage: text,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    // ยิงแจ้งเตือนผ่าน Worker ถ้า Admin ออฟไลน์
+    // 5.2 ยิงแจ้งเตือนผ่าน Worker ถ้า Admin ออฟไลน์
     if (adminDot.classList.contains("offline")) {
       fetch("https://aged-silence-89af.xxxcopyxx.workers.dev/chat-notify", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json" 
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: currentUser.phone,
           message: text
         })
-      })
-      .then(res => res.json())
-      .then(data => console.log("Worker Response:", data))
-      .catch(err => console.error("Worker fetch error:", err));
+      }).catch(err => console.error("Worker fetch error:", err));
     }
+
+    // 5.3 ขึ้นป้ายสถานะส่งสำเร็จ (ไม่สร้างบับเบิ้ลข้อความค้างบนจอ)
+    const statusNotice = document.createElement("div");
+    statusNotice.style.cssText = "text-align: center; color: #28a745; margin: 6px 0; font-size: 12px;";
+    statusNotice.textContent = "✓ ส่งข้อความเรียบร้อยแล้ว";
+    chatMessages.appendChild(statusNotice);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 
   } catch (err) {
     console.error("Send Error:", err);
@@ -228,25 +224,6 @@ async function sendMessage() {
   }
 }
 
-// 6. แสดง Bubble ข้อความที่เพิ่งส่งของลูกค้า (ฝั่งขวา)
-function renderLocalMessage(text) {
-  const msgElement = document.createElement("div");
-  msgElement.style.display = "flex";
-  msgElement.style.justifyContent = "flex-end";
-  msgElement.style.width = "100%";
-  msgElement.style.margin = "4px 0";
-
-  msgElement.innerHTML = `
-    <div style="background-color: #007bff; color: white; padding: 10px 14px; border-radius: 16px; max-width: 75%; word-break: break-word; text-align: left; font-size: 14px; line-height: 1.4;">
-      ${escapeHtml(text)}
-    </div>
-  `;
-
-  chatMessages.appendChild(msgElement);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-// ฟังก์ชันป้องกัน XSS
 function escapeHtml(string) {
   const div = document.createElement("div");
   div.textContent = string;
