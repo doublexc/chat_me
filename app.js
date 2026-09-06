@@ -77,6 +77,7 @@ btnLogin.addEventListener("click", async () => {
 
     loginModal.style.display = "none";
     
+    chatMessages.style.position = "relative";
     chatMessages.innerHTML = `
       <div style="text-align: center; color: #888; margin: 15px 0; font-size: 13px; line-height: 1.5;">
         เริ่มการสนทนากับ Admin แล้ว<br>
@@ -108,7 +109,7 @@ function listenToLiveReply(phone) {
         
         // กรองแสดงผลเฉพาะข้อความที่ส่งมาหลังเปิดหน้าเว็บรอบนี้เท่านั้น
         if (replyTime >= sessionStartTime) {
-          renderAdminReply(data.text, data.timestamp);
+          renderAdminReply(data.text, replyTime);
         }
       }
     }
@@ -118,19 +119,39 @@ function listenToLiveReply(phone) {
 }
 
 // 4. แสดงข้อความ Admin บนหน้าจอ
-// ปรับปรุงฟังก์ชัน renderAdminReply ให้แสดงบับเบิ้ลใหญ่ตรงกลาง
-// 5.3 อัปเดตป้ายแจ้งเตือน ตรึงไว้ล่างสุดของกรอบแชท
-    chatMessages.style.position = "relative";
-    let statusNotice = document.getElementById("send-status-notice");
-    if (!statusNotice) {
-      statusNotice = document.createElement("div");
-      statusNotice.id = "send-status-notice";
-      chatMessages.appendChild(statusNotice);
-    }
-    
-    // กำหนดสไตล์ให้อยู่ตรงกลางชิดล่าง
-    statusNotice.style.cssText = "position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #28a745; font-size: 13px; font-weight: bold; white-space: nowrap;";
-    statusNotice.textContent = "✓ ส่งข้อความเรียบร้อยแล้ว";
+function renderAdminReply(text, time) {
+  // ซ่อนป้ายสถานะส่งข้อความออกเมื่อมีข้อความตอบกลับจาก Admin
+  const statusNotice = document.getElementById("send-status-notice");
+  if (statusNotice) {
+    statusNotice.remove();
+  }
+
+  const timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  const replyCard = document.createElement("div");
+  replyCard.style.cssText = `
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 15px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    animation: fadeIn 0.3s ease-in;
+  `;
+
+  replyCard.innerHTML = `
+    <div style="font-size: 12px; font-weight: bold; color: #4338ca; margin-bottom: 6px; display: flex; justify-content: space-between;">
+      <span>คำตอบจาก Admin</span>
+      <span style="font-weight: normal; color: #6b7280;">${timeString}</span>
+    </div>
+    <div style="font-size: 15px; color: #1f2937; line-height: 1.5; word-break: break-word;">
+      ${escapeHtml(text)}
+    </div>
+  `;
+
+  chatMessages.appendChild(replyCard);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
 
 // 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
 let isSending = false;
@@ -178,9 +199,7 @@ async function sendMessage() {
       }).catch(err => console.error("Worker fetch error:", err));
     }
 
-    // 5.3 ขึ้นป้ายสถานะส่งสำเร็จ (ไม่สร้างบับเบิ้ลข้อความค้างบนจอ)
     // 5.3 อัปเดตป้ายแจ้งเตือน ตรึงไว้ล่างสุดของกรอบแชท
-    chatMessages.style.position = "relative";
     let statusNotice = document.getElementById("send-status-notice");
     if (!statusNotice) {
       statusNotice = document.createElement("div");
@@ -188,7 +207,6 @@ async function sendMessage() {
       chatMessages.appendChild(statusNotice);
     }
     
-    // กำหนดสไตล์ให้อยู่ตรงกลางชิดล่าง
     statusNotice.style.cssText = "position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); color: #28a745; font-size: 13px; font-weight: bold; white-space: nowrap;";
     statusNotice.textContent = "✓ ส่งข้อความเรียบร้อยแล้ว";
 
