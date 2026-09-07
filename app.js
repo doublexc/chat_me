@@ -60,8 +60,16 @@ btnLogin.addEventListener("click", async () => {
   const name = inputName.value.trim();
   const phone = inputPhone.value.trim().replace(/[^0-9]/g, "");
 
-  if (!name || !phone) {
-    alert("กรุณากรอกชื่อและเบอร์โทรศัพท์");
+  if (!name) {
+    alert("กรุณากรอกชื่อของคุณ");
+    inputName.focus();
+    return;
+  }
+
+  // ดักตรวจเบอร์โทรศัพท์: ต้องเป็นตัวเลขครบ 10 หลัก และขึ้นต้นด้วย 0
+  if (!/^0[0-9]{9}$/.test(phone)) {
+    alert("กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้องครบ 10 หลัก (เช่น 08xxxxxxxx)");
+    inputPhone.focus();
     return;
   }
 
@@ -81,7 +89,7 @@ btnLogin.addEventListener("click", async () => {
     }, { merge: true });
 
     loginModal.style.display = "none";
-    
+
     chatMessages.style.position = "relative";
     chatMessages.innerHTML = `
       <div style="text-align: center; color: #888; margin: 15px 0; font-size: 13px; line-height: 1.5;">
