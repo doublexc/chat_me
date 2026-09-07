@@ -15,13 +15,17 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// สร้าง sessionToken สุ่มประจำรอบเปิดเว็บ (ปิดแท็บแล้วล้างใหม่ แก้ปัญหาแชตเก่าค้าง 100%)
+let sessionToken = sessionStorage.getItem("chatSessionToken");
+if (!sessionToken) {
+  sessionToken = crypto.randomUUID();
+  sessionStorage.setItem("chatSessionToken", sessionToken);
+}
+
 let currentUser = {
   name: "",
   phone: ""
 };
-
-// บันทึกเวลาเปิดหน้าเว็บ เพื่อไม่ดึงข้อความที่เคยตอบไว้ก่อนหน้านี้มาแสดง
-const sessionStartTime = new Date();
 
 const loginModal = document.getElementById("login-modal");
 const inputName = document.getElementById("input-name");
@@ -68,10 +72,11 @@ btnLogin.addEventListener("click", async () => {
     currentUser.name = name;
     currentUser.phone = phone;
 
-    // บันทึกข้อมูลลูกค้าเข้าตู้เซฟ customers
+    // บันทึกข้อมูลลูกค้า พร้อมแนบ sessionToken ให้ Admin ใช้ตอบกลับ
     await setDoc(doc(db, "customers", phone), {
       phoneNumber: phone,
       displayName: name,
+      sessionToken: sessionToken,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
@@ -85,8 +90,8 @@ btnLogin.addEventListener("click", async () => {
       </div>
     `;
 
-    // เริ่มดักฟังคำตอบสดจากกระดาน live_replies
-    listenToLiveReply(phone);
+    // ฟังคำตอบสดผ่าน sessionToken แทนเบอร์โทร
+    listenToLiveReply(sessionToken);
 
   } catch (err) {
     console.error("Login Error:", err);
@@ -96,19 +101,11 @@ btnLogin.addEventListener("click", async () => {
   }
 });
 
-// 3. ดักฟังคำตอบสดจาก Admin ผ่านกระดาน live_replies
-function listenToLiveReply(phone) {
-  const replyDocRef = doc(db, "live_replies", phone);
-  let isInitialLoad = true;
+// 3. ดักฟังคำตอบสดจาก Admin ผ่านกระดาน live_replies ด้วย sessionToken
+function listenToLiveReply(token) {
+  const replyDocRef = doc(db, "live_replies", token);
 
   onSnapshot(replyDocRef, (docSnap) => {
-    // 🔒 ข้ามข้อมูลเดิมที่ตกค้างอยู่ในฐานข้อมูลทันทีตอนเปิดหน้าจอ
-    // จะทำงานเฉพาะเมื่อแอดมินพิมพ์ส่งข้อความใหม่ "สดๆ" เข้ามาหลังจากนี้เท่านั้น
-    if (isInitialLoad) {
-      isInitialLoad = false;
-      return; 
-    }
-
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.text) {
@@ -116,25 +113,23 @@ function listenToLiveReply(phone) {
       }
     }
   }, (err) => {
-    console.error("Listener error:", err);
+    console.error("Live reply listener error:", err);
   });
 }
 
-
-// 4. แสดงข้อความ Admin บนหน้าจอ (แสดงเฉพาะข้อความล่าสุดอันเดียว ไม่เก็บประวัติ)
+// 4. แสดงข้อความ Admin บนหน้าจอ (ลบกล่องเดิมทิ้ง แสดงเฉพาะข้อความล่าสุด 1 กล่อง ไม่เก็บประวัติ)
 function renderAdminReply(text, timestamp) {
-  // ลบป้ายสถานะส่งข้อความ
   const statusNotice = document.getElementById("send-status-notice");
   if (statusNotice) statusNotice.remove();
 
-  // 🔒 ลบกล่องคำตอบเดิมของ Admin ทั้งหมดทิ้งทันที ไม่ให้สะสมเป็นประวัติแชต
+  // ล้างกล่องคำตอบเดิมทิ้งทันที ป้องกันการเรียงซ้อนเป็นประวัติแชต
   const existingReplies = chatMessages.querySelectorAll(".admin-reply-card");
   existingReplies.forEach(card => card.remove());
 
   let timeString = "";
   if (timestamp) {
     const time = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    timeString = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    timeString = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
   const replyCard = document.createElement("div");
@@ -163,7 +158,6 @@ function renderAdminReply(text, timestamp) {
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-
 // 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
 let isSending = false;
 const COOLDOWN_SECONDS = 3;
@@ -186,19 +180,20 @@ async function sendMessage() {
   try {
     const messagesRef = collection(db, "customers", currentUser.phone, "messages");
 
-    // 5.1 บันทึกเข้าประวัติตู้เซฟ
+    // 5.1 บันทึกเข้าตู้เซฟ messages (ลูกค้าอ่านไม่ได้)
     await addDoc(messagesRef, {
       sender: "user",
       text: text,
       timestamp: serverTimestamp()
     });
 
+    // อัปเดตข้อมูลลูกค้า
     await setDoc(doc(db, "customers", currentUser.phone), {
       lastMessage: text,
       updatedAt: serverTimestamp()
     }, { merge: true });
 
-    // 5.2 ยิงแจ้งเตือนผ่าน Worker ถ้า Admin ออฟไลน์
+    // 5.2 แจ้งเตือนผ่าน Worker เมื่อ Admin ออฟไลน์
     if (adminDot.classList.contains("offline")) {
       fetch("https://aged-silence-89af.xxxcopyxx.workers.dev/chat-notify", {
         method: "POST",
@@ -210,7 +205,7 @@ async function sendMessage() {
       }).catch(err => console.error("Worker fetch error:", err));
     }
 
-    // 5.3 อัปเดตป้ายแจ้งเตือน ตรึงไว้ล่างสุดของกรอบแชท
+    // 5.3 อัปเดตป้ายแจ้งเตือนล่างสุด
     let statusNotice = document.getElementById("send-status-notice");
     if (!statusNotice) {
       statusNotice = document.createElement("div");
