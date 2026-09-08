@@ -117,7 +117,7 @@ function listenToLiveReply(token) {
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.text) {
-        (data.text, data.timestamp);
+        renderAdminReply(data.text, data.timestamp); // ✅ เติมชื่อฟังก์ชันให้ถูกต้อง
       }
     }
   }, (err) => {
