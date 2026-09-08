@@ -117,7 +117,7 @@ function listenToLiveReply(token) {
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.text) {
-        renderAdminReply(data.text, data.timestamp);
+        (data.text, data.timestamp);
       }
     }
   }, (err) => {
@@ -146,18 +146,18 @@ function renderAdminReply(text, timestamp) {
     background: #eef2ff;
     border: 1px solid #c7d2fe;
     border-radius: 12px;
-    padding: 14px 16px;
+    padding: 16px 20px;
     margin: 15px 0;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     animation: fadeIn 0.3s ease-in;
   `;
 
   replyCard.innerHTML = `
-    <div style="font-size: 12px; font-weight: bold; color: #4338ca; margin-bottom: 6px; display: flex; justify-content: space-between;">
+    <div style="font-size: 14px; font-weight: bold; color: #4338ca; margin-bottom: 10px; display: flex; justify-content: space-between;">
       <span>คำตอบล่าสุดจาก Admin</span>
       <span style="font-weight: normal; color: #6b7280;">${timeString}</span>
     </div>
-    <div style="font-size: 15px; color: #1f2937; line-height: 1.5; word-break: break-word;">
+    <div style="font-size: 38px; font-weight: bold; color: #1f2937; line-height: 1.35; word-break: break-word;">
       ${escapeHtml(text)}
     </div>
   `;
@@ -165,6 +165,7 @@ function renderAdminReply(text, timestamp) {
   chatMessages.appendChild(replyCard);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
 
 // 5. ส่งข้อความของลูกค้าเข้าตู้เซฟ (Write-Only)
 let isSending = false;
