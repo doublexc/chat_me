@@ -117,7 +117,8 @@ function listenToLiveReply(token) {
     if (docSnap.exists()) {
       const data = docSnap.data();
       if (data.text) {
-        renderAdminReply(data.text, data.timestamp); // ✅ เติมชื่อฟังก์ชันให้ถูกต้อง
+        // ✅ ส่ง data.sender เข้าไปด้วย
+        renderAdminReply(data.text, data.timestamp, data.sender);
       }
     }
   }, (err) => {
@@ -126,11 +127,12 @@ function listenToLiveReply(token) {
 }
 
 // 4. แสดงข้อความ Admin บนหน้าจอ (ลบกล่องเดิมทิ้ง แสดงเฉพาะข้อความล่าสุด 1 กล่อง ไม่เก็บประวัติ)
-function renderAdminReply(text, timestamp) {
+// 4. แสดงข้อความ Admin หรือ ALICes บนหน้าจอ
+function renderAdminReply(text, timestamp, sender) {
   const statusNotice = document.getElementById("send-status-notice");
   if (statusNotice) statusNotice.remove();
 
-  // ล้างกล่องคำตอบเดิมทิ้งทันที ป้องกันการเรียงซ้อนเป็นประวัติแชต
+  // ล้างกล่องคำตอบเดิมทิ้งทันที ป้องกันการเรียงซ้อน
   const existingReplies = chatMessages.querySelectorAll(".admin-reply-card");
   existingReplies.forEach(card => card.remove());
 
@@ -140,11 +142,21 @@ function renderAdminReply(text, timestamp) {
     timeString = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
+  // ตรวจสอบว่าข้อความมาจาก ALICes หรือ Admin
+  const isAi = sender === "ALICes";
+  const titleText = isAi ? "คำตอบจาก ALICes (ผู้ช่วย AI)" : "คำตอบล่าสุดจาก Admin";
+  
+  // เติมคำนำหน้า "ALICes : " ให้กับข้อความ หากยังไม่มี
+  let finalText = text;
+  if (isAi && !finalText.startsWith("ALICes :")) {
+    finalText = `ALICes : ${finalText}`;
+  }
+
   const replyCard = document.createElement("div");
   replyCard.className = "admin-reply-card";
   replyCard.style.cssText = `
-    background: #eef2ff;
-    border: 1px solid #c7d2fe;
+    background: ${isAi ? "#f5f3ff" : "#eef2ff"};
+    border: 1px solid ${isAi ? "#ddd6fe" : "#c7d2fe"};
     border-radius: 12px;
     padding: 16px 20px;
     margin: 15px 0;
@@ -153,12 +165,12 @@ function renderAdminReply(text, timestamp) {
   `;
 
   replyCard.innerHTML = `
-    <div style="font-size: 14px; font-weight: bold; color: #4338ca; margin-bottom: 10px; display: flex; justify-content: space-between;">
-      <span>คำตอบล่าสุดจาก Admin</span>
+    <div style="font-size: 14px; font-weight: bold; color: ${isAi ? "#6d28d9" : "#4338ca"}; margin-bottom: 10px; display: flex; justify-content: space-between;">
+      <span>${titleText}</span>
       <span style="font-weight: normal; color: #6b7280;">${timeString}</span>
     </div>
     <div style="font-size: 38px; font-weight: bold; color: #1f2937; line-height: 1.35; word-break: break-word;">
-      ${escapeHtml(text)}
+      ${escapeHtml(finalText)}
     </div>
   `;
 
@@ -209,7 +221,8 @@ async function sendMessage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: currentUser.phone,
-          message: text
+          message: text,
+          sessionToken: sessionToken // 🔒 ต้องมีบรรทัดนี้เพื่อให้ Worker ทราบตำแหน่งบันทึก
         })
       }).catch(err => console.error("Worker fetch error:", err));
     }
