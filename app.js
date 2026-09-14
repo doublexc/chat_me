@@ -145,12 +145,6 @@ function renderAdminReply(text, timestamp, sender) {
   // ตรวจสอบว่าข้อความมาจาก ALICes หรือ Admin
   const isAi = sender === "ALICes";
   const titleText = isAi ? "คำตอบจาก ALICes (ผู้ช่วย AI)" : "คำตอบล่าสุดจาก Admin";
-  
-  // เติมคำนำหน้า "ALICes : " ให้กับข้อความ หากยังไม่มี
-  let finalText = text;
-  if (isAi && !finalText.startsWith("ALICes :")) {
-    finalText = `ALICes : ${finalText}`;
-  }
 
   const replyCard = document.createElement("div");
   replyCard.className = "admin-reply-card";
@@ -169,8 +163,8 @@ function renderAdminReply(text, timestamp, sender) {
       <span>${titleText}</span>
       <span style="font-weight: normal; color: #6b7280;">${timeString}</span>
     </div>
-    <div style="font-size: 38px; font-weight: bold; color: #1f2937; line-height: 1.35; word-break: break-word;">
-      ${escapeHtml(finalText)}
+    <div style="font-size: 33px; font-weight: bold; color: #1f2937; line-height: 1.35; word-break: break-word;">
+      ${escapeHtml(text)}
     </div>
   `;
 
